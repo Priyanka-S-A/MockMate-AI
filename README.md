@@ -75,12 +75,12 @@ MockMate AI comes equipped with a wide array of premium features:
 ## 🌐 System Architecture
 
 ```mermaid
-graph TD
-    A[React Client] <-->|HTTPS / REST API| B[Express Backend]
-    B <-->|Mongoose ODM| C[(MongoDB Atlas)]
-    B <-->|Secure SDK Requests| D[Google Gemini AI Engine]
-    A -->|Speech-to-Text API| E[Web Speech Browser Engine]
-    A <--|Audio Out| F[Text-to-Speech Browser Engine]
+graph LR
+    A[React Frontend] --> B[Express Backend]
+    B --> C[(MongoDB Atlas)]
+    B --> D[Generative AI API]
+    A --> E[Speech-to-Text]
+    A --> F[Text-to-Speech]
 ```
 
 1.  **Frontend (React Client):** Serves the responsive Dark-Theme dashboard, coordinates interactive components (Web Speech API, Charts, resume file uploaders), and handles routing and authentication headers.
