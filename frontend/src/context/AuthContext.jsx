@@ -59,6 +59,20 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const data = await api.post('/auth/register', { name, email, password });
+      return data;
+    } catch (err) {
+      setError(err.message || 'Registration failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyRegisterOtp = async (email, otp) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.post('/auth/register-verify', { email, otp });
       localStorage.setItem('token', data.token);
       setUser({
         _id: data._id,
@@ -71,7 +85,21 @@ export const AuthProvider = ({ children }) => {
       });
       return data;
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      setError(err.message || 'OTP verification failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendRegisterOtp = async (email) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.post('/auth/register-resend', { email });
+      return data;
+    } catch (err) {
+      setError(err.message || 'Resend OTP failed');
       throw err;
     } finally {
       setLoading(false);
@@ -143,6 +171,8 @@ export const AuthProvider = ({ children }) => {
         error,
         login,
         register,
+        verifyRegisterOtp,
+        resendRegisterOtp,
         googleLogin,
         logout,
         updateProfile,

@@ -40,6 +40,20 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  authenticationMethod: {
+    type: String,
+    default: 'email',
+  },
+  otpHash: {
+    type: String,
+  },
+  otpExpiry: {
+    type: Date,
+  },
+  profilePicture: {
+    type: String,
+    default: '',
+  },
   profile: {
     bio: { type: String, default: '' },
     skills: { type: [String], default: [] },

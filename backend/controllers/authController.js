@@ -10,12 +10,20 @@ const generateToken = (id) => {
 
 import Settings from '../models/Settings.js';
 import { OAuth2Client } from 'google-auth-library';
+import OtpPending from '../models/OtpPending.js';
+import { sendOtpEmail } from '../utils/emailService.js';
+import bcrypt from 'bcryptjs';
 
-// @desc    Register a new user
+
+// @desc    Initiate registration by sending email OTP
 // @route   POST /api/auth/register
 // @access  Public
 export const register = async (req, res) => {
   const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: 'Please fill in all fields.' });
+  }
 
   try {
     const settings = await Settings.getSettings();
@@ -24,40 +32,141 @@ export const register = async (req, res) => {
     }
 
     const userExists = await User.findOne({ email });
-
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const user = await User.create({
+    // Generate secure 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const salt = await bcrypt.genSalt(10);
+    const otpHash = await bcrypt.hash(otp, salt);
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Store temporarily in OtpPending (delete existing pending for this email first)
+    await OtpPending.deleteMany({ email: email.toLowerCase() });
+    await OtpPending.create({
       name,
-      email,
-      password,
-      role: 'user',
+      email: email.toLowerCase(),
+      password, // Mongoose User model pre-save hook will hash it later upon verification
+      otpHash,
+      otpExpiry,
+      lastSentAt: new Date(),
     });
 
-    if (user) {
-      res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        profile: user.profile,
-        gamification: {
-          ...(user.gamification?.toObject ? user.gamification.toObject() : user.gamification),
-          completedInterviewsCount: 0,
-          completedInterviewDates: [],
-        },
-        subscriptionStatus: user.subscriptionStatus,
-        token: generateToken(user._id),
-      });
-    } else {
-      res.status(400).json({ message: 'Invalid user data' });
+    // Send OTP email
+    await sendOtpEmail(email, otp, 'registration');
+
+    res.status(200).json({ message: 'Verification OTP sent to your email.' });
+  } catch (error) {
+    console.error('Register Request Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Resend registration OTP
+// @route   POST /api/auth/register-resend
+// @access  Public
+export const resendRegisterOtp = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'Email address is required.' });
+  }
+
+  try {
+    const record = await OtpPending.findOne({ email: email.toLowerCase() });
+    if (!record) {
+      return res.status(404).json({ message: 'Registration session expired or not found. Please register again.' });
     }
+
+    // 60 seconds resend cooldown check
+    const timeElapsed = (Date.now() - new Date(record.lastSentAt).getTime()) / 1000;
+    if (timeElapsed < 60) {
+      return res.status(429).json({ message: `Please wait ${Math.ceil(60 - timeElapsed)} seconds before requesting a new OTP.` });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const salt = await bcrypt.genSalt(10);
+    record.otpHash = await bcrypt.hash(otp, salt);
+    record.otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+    record.lastSentAt = new Date();
+    await record.save();
+
+    await sendOtpEmail(email, otp, 'registration');
+
+    res.status(200).json({ message: 'Verification OTP has been resent.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Verify OTP and finalize registration
+// @route   POST /api/auth/register-verify
+// @access  Public
+export const verifyOtpRegister = async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    return res.status(400).json({ message: 'Email and verification OTP are required.' });
+  }
+
+  try {
+    const record = await OtpPending.findOne({ email: email.toLowerCase() });
+    if (!record) {
+      return res.status(400).json({ message: 'OTP session expired or invalid. Please sign up again.' });
+    }
+
+    // Expiry check
+    if (new Date(record.otpExpiry).getTime() < Date.now()) {
+      return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+    }
+
+    // OTP verification
+    const isMatch = await bcrypt.compare(otp, record.otpHash);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid verification code.' });
+    }
+
+    // Check one final time if account was created concurrently
+    const userExists = await User.findOne({ email: record.email });
+    if (userExists) {
+      await OtpPending.deleteMany({ email: record.email });
+      return res.status(400).json({ message: 'User account already registered.' });
+    }
+
+    // Create the permanent user account
+    const user = await User.create({
+      name: record.name,
+      email: record.email,
+      password: record.password, // Mongoose hashes it automatically in User schema pre-save hook
+      role: 'user', // assign user role
+      authProviders: ['local'],
+      emailVerified: true,
+      authenticationMethod: 'email',
+    });
+
+    // Delete temp registration
+    await OtpPending.deleteOne({ _id: record._id });
+
+    res.status(201).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profile: user.profile,
+      gamification: {
+        ...(user.gamification?.toObject ? user.gamification.toObject() : user.gamification),
+        completedInterviewsCount: 0,
+        completedInterviewDates: [],
+      },
+      subscriptionStatus: user.subscriptionStatus,
+      token: generateToken(user._id),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 
 // @desc    Authenticate user & get token
 // @route   POST /api/auth/login
@@ -71,6 +180,11 @@ export const login = async (req, res) => {
     if (user && (await user.comparePassword(password))) {
       if (user.status === 'suspended') {
         return res.status(403).json({ message: 'Your account has been suspended. Please contact support.' });
+      }
+      // Auto migrate existing user emailVerified status
+      if (!user.emailVerified) {
+        user.emailVerified = true;
+        await user.save();
       }
       const completedInterviews = await Interview.find({
         userId: user._id,
@@ -205,19 +319,103 @@ export const updateProfile = async (req, res) => {
   }
 };
 
-// @desc    Forgot Password (stub)
+// @desc    Initiate password recovery by sending recovery OTP
 // @route   POST /api/auth/forgot-password
 // @access  Public
 export const forgotPassword = async (req, res) => {
   const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: 'Email address is required.' });
+  }
   try {
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    // Return a mock success response explaining reset flow
+    
+    // Generate recovery OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const salt = await bcrypt.genSalt(10);
+    user.otpHash = await bcrypt.hash(otp, salt);
+    user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    await user.save();
+
+    await sendOtpEmail(email, otp, 'password_reset');
+
     res.json({
-      message: 'Password reset link has been dispatched to your email address (Mocked service).',
+      message: 'Password recovery OTP has been sent to your email address.',
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Verify forgot password OTP
+// @route   POST /api/auth/forgot-password-verify
+// @access  Public
+export const verifyForgotPasswordOtp = async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ message: 'Email and OTP are required.' });
+  }
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Expiry check
+    if (!user.otpExpiry || new Date(user.otpExpiry).getTime() < Date.now()) {
+      return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+    }
+
+    // Comparison check
+    const isMatch = await bcrypt.compare(otp, user.otpHash);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid verification code.' });
+    }
+
+    res.json({
+      message: 'OTP verified successfully. You may now reset your password.',
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Reset password using recovery OTP
+// @route   POST /api/auth/forgot-password-reset
+// @access  Public
+export const resetPassword = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ message: 'Email, OTP, and new password are required.' });
+  }
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Expiry check
+    if (!user.otpExpiry || new Date(user.otpExpiry).getTime() < Date.now()) {
+      return res.status(400).json({ message: 'OTP has expired.' });
+    }
+
+    // OTP verification
+    const isMatch = await bcrypt.compare(otp, user.otpHash);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid recovery verification code.' });
+    }
+
+    // Update password
+    user.password = newPassword; // hashed automatically by User model pre-save hook
+    user.otpHash = undefined;
+    user.otpExpiry = undefined;
+    await user.save();
+
+    res.json({
+      message: 'Password has been reset successfully. You may now log in.',
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
