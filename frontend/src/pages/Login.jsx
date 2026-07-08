@@ -1,15 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
+import { Mail, Lock, LogIn, AlertCircle, AlertTriangle } from 'lucide-react';
 
 const Login = () => {
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const isDev = import.meta.env.DEV;
+
+  useEffect(() => {
+    let checkInterval;
+    const initGoogle = () => {
+      if (clientId && window.google) {
+        clearInterval(checkInterval);
+        try {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: async (response) => {
+              setLoading(true);
+              setLocalError(null);
+              try {
+                await googleLogin(response.credential);
+                navigate('/dashboard');
+              } catch (err) {
+                setLocalError(err.message || 'Google Authentication failed.');
+              } finally {
+                setLoading(false);
+              }
+            },
+          });
+          window.google.accounts.id.renderButton(
+            document.getElementById('google-signin-btn'),
+            {
+              theme: 'filled_black',
+              size: 'large',
+              width: 320,
+              text: 'continue_with',
+              shape: 'rectangular',
+            }
+          );
+        } catch (err) {
+          console.error('Google Sign-In initialization failed:', err);
+        }
+      }
+    };
+
+    initGoogle();
+    if (clientId && !window.google) {
+      checkInterval = setInterval(initGoogle, 500);
+    }
+    return () => clearInterval(checkInterval);
+  }, [clientId, googleLogin, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -106,6 +153,27 @@ const Login = () => {
             )}
           </button>
         </form>
+
+        <div className="relative flex py-4 items-center">
+          <div className="flex-grow border-t border-neutral-900"></div>
+          <span className="flex-shrink mx-4 text-neutral-500 text-xs font-semibold uppercase tracking-wider">or</span>
+          <div className="flex-grow border-t border-neutral-900"></div>
+        </div>
+
+        {clientId ? (
+          <div className="flex justify-center">
+            <div id="google-signin-btn" />
+          </div>
+        ) : (
+          isDev && (
+            <div className="p-3 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-400 leading-relaxed flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Google Sign-In Unconfigured:</span> Define <code className="bg-neutral-900 px-1 py-0.5 rounded font-mono text-white text-[9px]">VITE_GOOGLE_CLIENT_ID</code> in environment to activate.
+              </div>
+            </div>
+          )
+        )}
 
         {/* Signup redirection link */}
         <p className="mt-8 text-center text-neutral-500 text-xs sm:text-sm">

@@ -20,7 +20,9 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Please enter a password'],
+    required: function() {
+      return this.authProviders && this.authProviders.includes('local');
+    },
     minlength: [6, 'Password must be at least 6 characters long'],
     select: false,
   },
@@ -28,6 +30,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'admin'],
     default: 'user',
+  },
+  authProviders: {
+    type: [String],
+    enum: ['local', 'google'],
+    default: ['local'],
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false,
   },
   profile: {
     bio: { type: String, default: '' },

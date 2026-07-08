@@ -9,6 +9,7 @@ const generateToken = (id) => {
 };
 
 import Settings from '../models/Settings.js';
+import { OAuth2Client } from 'google-auth-library';
 
 // @desc    Register a new user
 // @route   POST /api/auth/register
@@ -222,3 +223,121 @@ export const forgotPassword = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Login or Register with Google
+// @route   POST /api/auth/google
+// @access  Public
+export const googleLoginOrRegister = async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({ message: 'Google ID Token is required.' });
+  }
+
+  const clientID = process.env.GOOGLE_CLIENT_ID;
+  if (!clientID) {
+    return res.status(500).json({ message: 'Google client ID is not configured on the server.' });
+  }
+
+  try {
+    const client = new OAuth2Client(clientID);
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: clientID,
+    });
+    const payload = ticket.getPayload();
+
+    if (!payload) {
+      return res.status(400).json({ message: 'Invalid ID Token.' });
+    }
+
+    const { name, email, picture, email_verified } = payload;
+
+    if (!email_verified) {
+      return res.status(400).json({ message: 'Google email is not verified.' });
+    }
+
+    // 1. Check if user already exists
+    let user = await User.findOne({ email });
+
+    if (user) {
+      // User exists. Merge authentication method if they don't have 'google' already
+      let modified = false;
+      if (!user.authProviders.includes('google')) {
+        user.authProviders.push('google');
+        modified = true;
+      }
+      if (!user.emailVerified) {
+        user.emailVerified = true;
+        modified = true;
+      }
+      if (picture && !user.profile.avatar) {
+        user.profile.avatar = picture;
+        modified = true;
+      }
+      
+      if (modified) {
+        await user.save();
+      }
+    } else {
+      // Check if registration is enabled in Settings
+      const settings = await Settings.getSettings();
+      if (!settings.registrationsEnabled) {
+        return res.status(403).json({ message: 'Registrations are currently disabled by the administrator.' });
+      }
+
+      // Create new user with authProviders: ['google']
+      user = await User.create({
+        name,
+        email,
+        role: 'user', // strictly assign user role
+        authProviders: ['google'],
+        emailVerified: true,
+        profile: {
+          bio: '',
+          skills: [],
+          targetJob: '',
+          avatar: picture || '',
+        },
+      });
+    }
+
+    if (user.status === 'suspended') {
+      return res.status(403).json({ message: 'Your account has been suspended. Please contact support.' });
+    }
+
+    // Retrieve stats identical to normal login
+    const completedInterviews = await Interview.find({
+      userId: user._id,
+      status: 'completed',
+    });
+    const completedInterviewsCount = completedInterviews.length;
+    const completedInterviewDates = Array.from(
+      new Set(
+        completedInterviews.map((iv) => {
+          const dateObj = new Date(iv.createdAt);
+          return dateObj.toISOString().split('T')[0];
+        })
+      )
+    ).sort();
+
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profile: user.profile,
+      gamification: {
+        ...(user.gamification?.toObject ? user.gamification.toObject() : user.gamification),
+        completedInterviewsCount,
+        completedInterviewDates,
+      },
+      subscriptionStatus: user.subscriptionStatus,
+      token: generateToken(user._id),
+    });
+  } catch (error) {
+    console.error('Google Sign-In Error:', error);
+    res.status(400).json({ message: 'Google Authentication failed: ' + error.message });
+  }
+};
+
