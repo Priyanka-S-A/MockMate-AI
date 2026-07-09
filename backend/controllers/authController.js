@@ -53,10 +53,15 @@ export const register = async (req, res) => {
       lastSentAt: new Date(),
     });
 
-    // Send OTP email
-    await sendOtpEmail(email, otp, 'registration');
-
+    // Respond immediately — email dispatches in the background so the
+    // OTP verification page opens right away even if SMTP is unreachable.
     res.status(200).json({ message: 'Verification OTP sent to your email.' });
+
+    // Fire-and-forget: errors are caught internally by sendOtpEmail and
+    // logged to the console (visible in Render logs) without blocking the response.
+    sendOtpEmail(email, otp, 'registration').catch((err) =>
+      console.error('[register] Background email dispatch error:', err.message)
+    );
   } catch (error) {
     console.error('Register Request Error:', error);
     res.status(500).json({ message: error.message });
@@ -92,9 +97,12 @@ export const resendRegisterOtp = async (req, res) => {
     record.lastSentAt = new Date();
     await record.save();
 
-    await sendOtpEmail(email, otp, 'registration');
-
+    // Respond immediately then send email in the background.
     res.status(200).json({ message: 'Verification OTP has been resent.' });
+
+    sendOtpEmail(email, otp, 'registration').catch((err) =>
+      console.error('[resendRegisterOtp] Background email dispatch error:', err.message)
+    );
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -340,11 +348,14 @@ export const forgotPassword = async (req, res) => {
     user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
     await user.save();
 
-    await sendOtpEmail(email, otp, 'password_reset');
-
+    // Respond immediately then dispatch the password-reset email in the background.
     res.json({
       message: 'Password recovery OTP has been sent to your email address.',
     });
+
+    sendOtpEmail(email, otp, 'password_reset').catch((err) =>
+      console.error('[forgotPassword] Background email dispatch error:', err.message)
+    );
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
