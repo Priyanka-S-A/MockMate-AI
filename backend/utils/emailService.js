@@ -1,13 +1,10 @@
 import nodemailer from 'nodemailer';
 
-// Maximum time (ms) we will wait for SMTP before giving up and falling back.
-const SMTP_TIMEOUT_MS = 5000;
-
 /**
- * Attempts to send an OTP email via SMTP.
- * Hard-limited to SMTP_TIMEOUT_MS via Promise.race — never hangs the caller.
- * On any failure (network unreachable, timeout, bad credentials) the OTP is
- * printed clearly to the server console so Render logs always show it.
+ * Sends an OTP email via SMTP.
+ * Highly robust and uses nodemailer's built-in timeouts to prevent hangs.
+ * If SMTP fails or connection times out, it falls back to console logging
+ * and resolves successfully, ensuring the registration flow never crashes.
  */
 export const sendOtpEmail = async (email, otp, type = 'registration') => {
   const host = process.env.SMTP_HOST;
@@ -34,7 +31,6 @@ export const sendOtpEmail = async (email, otp, type = 'registration') => {
     </div>
   `;
 
-  // ── Console fallback (always available) ─────────────────────────────────────
   const logOtpToConsole = (reason) => {
     console.log('\n========================================================================');
     console.log(`📧 [OTP FALLBACK — ${reason}]`);
@@ -46,47 +42,33 @@ export const sendOtpEmail = async (email, otp, type = 'registration') => {
 
   if (host && user && pass) {
     try {
-      // Build a timeout promise that rejects after SMTP_TIMEOUT_MS
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`SMTP timed out after ${SMTP_TIMEOUT_MS}ms`)),
-          SMTP_TIMEOUT_MS
-        )
-      );
+      const transporter = nodemailer.createTransport({
+        host,
+        port: parseInt(port),
+        secure: parseInt(port) === 465,
+        auth: { user, pass },
+        // Native nodemailer timeouts (in milliseconds)
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 5000,
+      });
 
-      const smtpPromise = (async () => {
-        const transporter = nodemailer.createTransport({
-          host,
-          port: parseInt(port),
-          secure: parseInt(port) === 465,
-          auth: { user, pass },
-          // Hard connection-level timeouts — nodemailer gives up fast on its own too
-          connectionTimeout: SMTP_TIMEOUT_MS,
-          greetingTimeout: SMTP_TIMEOUT_MS,
-          socketTimeout: SMTP_TIMEOUT_MS,
-        });
+      await transporter.sendMail({
+        from: `"MockMate AI" <${user}>`,
+        to: email,
+        subject,
+        html: htmlContent,
+      });
 
-        await transporter.sendMail({
-          from: `"MockMate AI" <${user}>`,
-          to: email,
-          subject,
-          html: htmlContent,
-        });
-      })();
-
-      // Race: if SMTP takes longer than SMTP_TIMEOUT_MS the timeout wins
-      await Promise.race([smtpPromise, timeoutPromise]);
       console.log(`📧 [Email Service] OTP email sent successfully via SMTP to: ${email}`);
       return true;
     } catch (error) {
-      // SMTP failed or timed out — log OTP to console so it is visible in Render logs
       console.error(`[Email Service] SMTP failed (${error.message}). Falling back to console log.`);
       logOtpToConsole('SMTP FAILURE');
     }
   } else {
-    // No SMTP credentials configured — development / local fallback
     logOtpToConsole('SMTP NOT CONFIGURED');
   }
 
-  return true; // Always resolves — the registration request is never blocked
+  return true;
 };
