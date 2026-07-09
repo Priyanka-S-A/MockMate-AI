@@ -168,16 +168,10 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         loading,
-        error,
-        login,
-        register,
-        verifyRegisterOtp,
-        resendRegisterOtp,
         googleLogin,
         logout,
         updateProfile,
         refreshUser,
-        clearError,
       }}
     >
       {children}
