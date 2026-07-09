@@ -8,6 +8,8 @@
 [![Gemini AI](https://img.shields.io/badge/Gemini%20AI-8E44AD?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![JWT Authentication](https://img.shields.io/badge/JWT-black?style=for-the-badge&logo=JSON%20web%20tokens)](https://jwt.io/)
 [![Chart.js](https://img.shields.io/badge/chart.js-F5788D.svg?style=for-the-badge&logo=chart.js&logoColor=white)](https://www.chartjs.org/)
+[![Google OAuth](https://img.shields.io/badge/Google%20OAuth-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://developers.google.com/identity)
+[![Nodemailer](https://img.shields.io/badge/Nodemailer-009688?style=for-the-badge&logo=gmail&logoColor=white)](https://nodemailer.com/)
 
 ---
 
@@ -22,17 +24,18 @@ With features like Speech-to-Text response capturing, interactive Text-to-Speech
 1. [Features](#-features)
 2. [Technology Stack](#-technology-stack)
 3. [System Architecture](#-system-architecture)
-4. [Folder Structure](#-folder-structure)
-5. [Installation Guide](#-installation-guide)
-6. [Environment Variables](#-environment-variables)
-7. [Usage Guide](#-usage-guide)
-8. [Admin Portal](#-admin-portal)
-9. [Screenshots](#-screenshots)
-10. [Challenges Faced](#-challenges-faced)
-11. [Key Learning Outcomes](#-key-learning-outcomes)
-12. [Future Enhancements](#-future-enhancements)
-13. [Developer](#-developer)
-14. [License](#-license)
+4. [Authentication Flow](#-authentication-flow)
+5. [Security Features](#-security-features)
+6. [Folder Structure](#-folder-structure)
+7. [Installation Guide](#-installation-guide)
+8. [Environment Variables](#-environment-variables)
+9. [Usage Guide](#-usage-guide)
+10. [Admin Portal](#-admin-portal)
+11. [Screenshots](#-screenshots)
+12. [Challenges Faced](#-challenges-faced)
+13. [Key Learning Outcomes](#-key-learning-outcomes)
+14. [Developer](#-developer)
+15. [License](#-license)
 
 ---
 
@@ -52,6 +55,13 @@ MockMate AI comes equipped with a wide array of premium features:
 *   **Interview History Log:** Revisit all previous mock sessions, complete with detailed breakdowns of your strengths, weaknesses, and performance statistics.
 *   **PDF Report Generation:** Export professionally formatted PDF report cards summarizing scores, domains, and question details.
 *   **XP and Interview Tracking:** Track your growth using your total completed interview counts, XP awards, and activity calendars.
+*   **Google Sign-In Authentication:** One-click registration and login using your Google account via Google Identity Services (OAuth 2.0).
+*   **Email OTP Verification:** New accounts are created only after verifying a 6-digit OTP sent to the registered email — no unverified accounts in the database.
+*   **Automatic Login after OTP Verification:** Upon successful OTP verification, users are instantly logged in without a separate login step.
+*   **Forgot Password via OTP:** Recover account access through a secure 3-step flow: submit email → verify OTP → reset password.
+*   **Multi-Provider Authentication:** A single account can authenticate via both email/password and Google Sign-In simultaneously without duplication.
+*   **60-Second OTP Resend Cooldown:** Prevents OTP spam by enforcing a 60-second wait between resend requests.
+*   **Secure JWT Authentication:** Stateless, expiring JWT tokens protect all authenticated API routes.
 *   **Secure Authentication:** Secure user sign-up, JWT-based login sessions, password encryption, and automatic user profile management.
 *   **Admin Portal:** A hidden, secure dashboard providing platform-wide statistics, user moderation (suspend, activate, delete accounts), session management, and server settings.
 *   **Responsive UI:** A fully responsive, modern, dark-themed UI styled meticulously with vanilla CSS and HSL tailormade colors.
@@ -67,6 +77,9 @@ MockMate AI comes equipped with a wide array of premium features:
 | **Database** | MongoDB Atlas, Mongoose | NoSQL database storing users, interview sessions, daily challenges, and settings. |
 | **AI Integration** | Generative AI API | Real-time generation of custom questions, evaluations, and mock templates. |
 | **Authentication** | JWT (JSON Web Tokens), bcryptjs | Secure stateless auth sessions, route protection, and hashed password security. |
+| **Google OAuth** | Google Identity Services | One-click Google Sign-In for registration and login via OAuth 2.0 ID token verification. |
+| **Email Service** | Nodemailer, Gmail SMTP | Transactional OTP emails for account verification and password recovery. |
+| **OTP Verification** | bcryptjs, Mongoose TTL | 6-digit OTPs hashed with bcrypt and stored in a self-expiring TTL collection (5-minute auto-purge). |
 | **Charts & Visualization** | Chart.js, react-chartjs-2 | Visual trends, registration lines, domain doughnuts, and activity tracking. |
 | **Other Libraries** | pdfkit, multer, pdf-parse, lucide-react | PDF certificate rendering, file upload management, resume parsing, and premium iconography. |
 
@@ -90,6 +103,58 @@ graph LR
 
 ---
 
+## 🔐 Authentication Flow
+
+MockMate AI implements a fully secure, multi-provider authentication system:
+
+### ✉️ Email + Password Registration
+```
+User fills Name / Email / Password
+    → OTP generated & emailed (valid 5 minutes)
+    → OTP Verification Screen (6-digit input)
+    → Account created in database
+    → JWT issued → Automatic Login → Dashboard
+```
+
+### 🔵 Google Sign-In
+```
+User clicks "Continue with Google"
+    → Google ID Token verified on backend (OAuth 2.0)
+    → New user: account auto-created with role=user
+    → Existing user: Google provider merged (no duplicate)
+    → JWT issued → Automatic Login → Dashboard
+```
+
+### 🔑 Forgot Password Recovery
+```
+User submits registered email
+    → Recovery OTP emailed (valid 5 minutes)
+    → OTP Verification Screen
+    → New Password form
+    → Password updated securely → Redirect to Login
+```
+
+> **Note:** OTP resend requests are rate-limited to once every **60 seconds**. Unverified registrations auto-expire after 5 minutes via a MongoDB TTL index.
+
+---
+
+## 🛡️ Security Features
+
+| Feature | Implementation |
+|---|---|
+| **JWT Authentication** | Stateless tokens with configurable expiry (default 7 days) |
+| **Password Hashing** | bcryptjs with salt rounds on every save via Mongoose pre-save hook |
+| **Google OAuth Verification** | Server-side ID token verification using `google-auth-library` |
+| **Email OTP Verification** | 6-digit OTP hashed with bcrypt before storage |
+| **OTP Expiration** | All OTPs expire after **5 minutes** |
+| **OTP Resend Cooldown** | **60-second** cooldown enforced server-side (HTTP 429) |
+| **Temporary Registration Store** | Pending registrations stored in TTL collection — auto-deleted after 5 min |
+| **Protected Routes** | JWT middleware guards all private API endpoints |
+| **Admin Route Guard** | Role check (`req.user.role === 'admin'`) blocks unauthorized portal access |
+| **Account Suspension** | Suspended accounts are blocked at login with a clear error message |
+
+---
+
 ## 📁 Folder Structure
 
 ```text
@@ -98,9 +163,9 @@ AI_Interview_Practice_Platform/
 │   ├── config/             # Database connection setup
 │   ├── controllers/        # Controllers for Auth, Interviews, Settings, and Admin
 │   ├── middleware/         # JWT parsing, auth protection, status and maintenance checks
-│   ├── models/             # Mongoose Schemas (User, Interview, Settings, DailyChallenge)
+│   ├── models/             # Mongoose Schemas (User, Interview, Settings, DailyChallenge, OtpPending)
 │   ├── routes/             # API Router definitions (auth, interviews, stats, settings, admin)
-│   ├── utils/              # PDF generator utility and local fallback question templates
+│   ├── utils/              # PDF generator, email OTP service (Nodemailer), and fallback question templates
 │   ├── server.js           # Server entry point
 │   └── package.json
 └── frontend/
@@ -170,13 +235,54 @@ cd MockMate-AI
 To run the backend server, create a `.env` file in the `/backend` folder with the following variables:
 
 ```env
+# Server
 PORT=5000
+CLIENT_URL=http://localhost:5173
+
+# Database
 MONGODB_URI=your_mongodb_atlas_connection_string
+
+# JWT
 JWT_SECRET=your_jwt_signing_secret_key
 JWT_EXPIRES_IN=7d
+
+# AI
 GEMINI_API_KEY=your_google_gemini_api_key
-CLIENT_URL=http://localhost:5173
+
+# Google OAuth (backend token verification)
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+
+# Gmail SMTP (for OTP email delivery)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-gmail-address@gmail.com
+SMTP_PASS=your-gmail-app-password
 ```
+
+For the frontend, create a `.env` file in the `/frontend` folder:
+
+```env
+# Google OAuth (frontend button rendering)
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+```
+
+> **Variable Reference**
+>
+> | Variable | Description |
+> |---|---|
+> | `MONGODB_URI` | MongoDB Atlas connection string |
+> | `JWT_SECRET` | Secret key used to sign JSON Web Tokens |
+> | `JWT_EXPIRES_IN` | Token lifetime (e.g. `7d`, `24h`) |
+> | `GEMINI_API_KEY` | API key for Google Gemini AI question generation |
+> | `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID for server-side Google token verification |
+> | `VITE_GOOGLE_CLIENT_ID` | Same Client ID exposed to Vite frontend for Google Sign-In button |
+> | `SMTP_HOST` | SMTP server hostname (e.g. `smtp.gmail.com`) |
+> | `SMTP_PORT` | SMTP port (`587` for TLS, `465` for SSL) |
+> | `SMTP_USER` | Gmail address used as the OTP email sender |
+> | `SMTP_PASS` | Gmail App Password (not your regular Gmail password) |
+>
+> **Tip:** Generate a Gmail App Password at **Google Account → Security → App Passwords**.
+> If SMTP variables are not set, OTPs will be logged to the backend console (development fallback).
 
 ---
 
@@ -206,6 +312,24 @@ MockMate AI features a secure, hidden administrative portal reserved for adminis
 
 #### Landing Page
 > *Professional introduction layout featuring key value propositions and CTA buttons.*
+
+#### Login Page
+> *Dark-themed login form with email/password fields and "Continue with Google" OAuth button.*
+
+#### Registration Page — Step 1
+> *Registration form capturing Name, Email, Password, and Confirm Password with Google Sign-In option.*
+
+#### Registration Page — Step 2 (OTP Verification)
+> *6-digit OTP input screen with 60-second countdown timer and resend button, dispatched after registration.*
+
+#### Forgot Password — Step 1 (Email Entry)
+> *Email submission form to trigger the account recovery OTP flow.*
+
+#### Forgot Password — Step 2 (OTP Verification)
+> *OTP verification screen with resend cooldown for password recovery.*
+
+#### Forgot Password — Step 3 (Reset Password)
+> *New password and confirm password form to finalize account recovery.*
 
 #### Dashboard
 > *Permanent dark-themed layout displaying total interviews, XP tracker, daily challenge, and quick mock options.*
@@ -246,6 +370,9 @@ MockMate AI features a secure, hidden administrative portal reserved for adminis
 *   Managing state with React Context and securing routes using JWT.
 *   Integrating browser speech APIs (Synthesis and Recognition).
 *   Visualizing datasets using Chart.js wrappers.
+*   Implementing multi-provider authentication (Email OTP + Google OAuth 2.0) with secure token flows.
+*   Building SMTP-driven email services with bcrypt-hashed OTP verification and TTL-based auto-expiry.
+*   Designing role-based access control with JWT middleware and admin route guards.
 
 ---
 

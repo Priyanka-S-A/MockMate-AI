@@ -13,6 +13,7 @@ import {
   Globe, Menu, LogOut, Activity, UserPlus, ToggleLeft, ToggleRight, Download,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { useNavigate } from 'react-router-dom';
 
 ChartJS.register(
@@ -474,6 +475,7 @@ const SettingsSection = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { fetchSettings } = useSettings();
 
   useEffect(() => {
     api.get('/admin/settings').then(d => { setSettings(d); setLoading(false); }).catch(console.error);
@@ -483,7 +485,9 @@ const SettingsSection = () => {
     setSaving(true);
     try {
       await api.put('/admin/settings', { platformName: settings.platformName, logoUrl: settings.logoUrl, registrationsEnabled: settings.registrationsEnabled, maintenanceMode: settings.maintenanceMode });
-      setSaved(true); setTimeout(() => setSaved(false), 3000);
+      setSaved(true); 
+      setTimeout(() => setSaved(false), 3000);
+      await fetchSettings();
     } catch (e) { alert(e.message || 'Failed to save settings.'); }
     finally { setSaving(false); }
   };
@@ -555,12 +559,16 @@ const SECTIONS = [
 
 const AdminPortal = () => {
   const { user, logout } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const [active, setActive] = useState('dashboard');
   const [dashData, setDashData] = useState(null);
   const [dashLoading, setDashLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const platformName = settings?.platformName || 'MockMate AI';
+  const logoUrl = settings?.logoUrl;
 
   const loadDash = useCallback(async () => {
     setDashLoading(true);
@@ -577,13 +585,19 @@ const AdminPortal = () => {
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:flex`}>
         <div className="p-5 border-b border-neutral-800">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-gold-500" />
-            </div>
-            <div>
-              <p className="font-extrabold text-white text-sm leading-tight">MockMate AI</p>
-              <p className="text-[10px] text-gold-500 font-semibold uppercase tracking-widest">Admin Portal</p>
-            </div>
+            {logoUrl ? (
+              <img src={logoUrl} alt={platformName} className="h-9 object-contain" />
+            ) : (
+              <>
+                <div className="w-9 h-9 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-center shrink-0">
+                  <Shield className="w-5 h-5 text-gold-500" />
+                </div>
+                <div>
+                  <p className="font-extrabold text-white text-sm leading-tight">{platformName}</p>
+                  <p className="text-[10px] text-gold-500 font-semibold uppercase tracking-widest">Admin Portal</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
@@ -627,7 +641,7 @@ const AdminPortal = () => {
             </button>
             <div>
               <h1 className="text-base font-extrabold text-white">{SECTIONS.find(s => s.id === active)?.label}</h1>
-              <p className="text-xs text-neutral-500 hidden sm:block">MockMate AI — Admin Control Panel</p>
+              <p className="text-xs text-neutral-500 hidden sm:block">{platformName} — Admin Control Panel</p>
             </div>
           </div>
           <div className="flex items-center gap-3">

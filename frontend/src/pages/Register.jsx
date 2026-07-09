@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { User, Mail, Lock, UserPlus, AlertCircle, AlertTriangle, ArrowLeft, KeyRound, Check } from 'lucide-react';
 
 const Register = () => {
   const { register, verifyRegisterOtp, resendRegisterOtp, googleLogin } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
 
   // Step 1: Details, Step 2: OTP
@@ -22,11 +24,15 @@ const Register = () => {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const isDev = import.meta.env.DEV;
 
+  const platformName = settings?.platformName || 'MockMate AI';
+  const logoUrl = settings?.logoUrl;
+  const registrationsEnabled = settings?.registrationsEnabled ?? true;
+
   // Google OAuth Initialization
   useEffect(() => {
     let checkInterval;
     const initGoogle = () => {
-      if (clientId && window.google && step === 1) {
+      if (clientId && window.google && step === 1 && registrationsEnabled) {
         clearInterval(checkInterval);
         try {
           window.google.accounts.id.initialize({
@@ -64,11 +70,11 @@ const Register = () => {
     };
 
     initGoogle();
-    if (clientId && !window.google && step === 1) {
+    if (clientId && !window.google && step === 1 && registrationsEnabled) {
       checkInterval = setInterval(initGoogle, 500);
     }
     return () => clearInterval(checkInterval);
-  }, [clientId, googleLogin, navigate, step]);
+  }, [clientId, googleLogin, navigate, step, registrationsEnabled]);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -82,6 +88,10 @@ const Register = () => {
   // Handle Step 1 Registration submit (Request OTP)
   const handleSubmitDetails = async (e) => {
     e.preventDefault();
+    if (!registrationsEnabled) {
+      setLocalError('Registrations are currently disabled.');
+      return;
+    }
     if (!name || !email || !password || !confirmPassword) {
       setLocalError('Please fill in all fields.');
       return;
@@ -162,9 +172,15 @@ const Register = () => {
         )}
 
         {/* Title */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-block font-extrabold text-2xl tracking-wider text-white mb-2">
-            <span className="text-gold-500 font-extrabold">MockMate</span> <span className="text-neutral-200">AI</span>
+        <div className="text-center mb-8 space-y-2">
+          <Link to="/" className="inline-block mb-2">
+            {logoUrl ? (
+              <img src={logoUrl} alt={platformName} className="h-12 object-contain" />
+            ) : (
+              <span className="font-extrabold text-2xl tracking-wider text-white">
+                <span className="text-gold-500 font-extrabold">MockMate</span> <span className="text-neutral-200">AI</span>
+              </span>
+            )}
           </Link>
           <p className="text-neutral-400 text-xs sm:text-sm">
             {step === 1 ? 'Create an account to begin mock trials' : 'Enter verification code'}
@@ -179,173 +195,190 @@ const Register = () => {
           </div>
         )}
 
-        {/* STEP 1: Registration form */}
-        {step === 1 && (
-          <>
-            <form onSubmit={handleSubmitDetails} className="space-y-5">
-              {/* Full Name */}
-              <div>
-                <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="John Doe"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Confirm Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
-                  <input
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Repeat password"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Submit button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 rounded bg-gold-500 hover:bg-gold-400 text-black font-bold tracking-wide text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" />
-                    <span>Register</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            <div className="relative flex py-4 items-center">
-              <div className="flex-grow border-t border-neutral-900"></div>
-              <span className="flex-shrink mx-4 text-neutral-500 text-xs font-semibold uppercase tracking-wider">or</span>
-              <div className="flex-grow border-t border-neutral-900"></div>
+        {/* Dynamic block for Registrations Disabled */}
+        {!registrationsEnabled && step === 1 ? (
+          <div className="space-y-6 text-center py-4">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-500">
+              <AlertTriangle className="w-8 h-8 animate-pulse" />
             </div>
-
-            {/* Google Login button */}
-            {clientId ? (
-              <div className="flex justify-center">
-                <div id="google-signin-btn" />
-              </div>
-            ) : (
-              isDev && (
-                <div className="p-3 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-400 leading-relaxed flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">Google Sign-In Unconfigured:</span> Define <code className="bg-neutral-900 px-1 py-0.5 rounded font-mono text-white text-[9px]">VITE_GOOGLE_CLIENT_ID</code> in environment to activate.
-                  </div>
-                </div>
-              )
-            )}
-          </>
-        )}
-
-        {/* STEP 2: OTP Verification form */}
-        {step === 2 && (
-          <div className="space-y-6">
-            <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40 text-center space-y-2">
-              <p className="text-xs text-neutral-400">An OTP code has been dispatched to:</p>
-              <p className="text-sm font-bold text-white tracking-wide">{email}</p>
-              <p className="text-[10px] text-neutral-500">Please enter the 6-digit code within 5 minutes.</p>
-            </div>
-
-            <form onSubmit={handleVerifyOtp} className="space-y-5">
-              <div>
-                <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Verification Code</label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
-                  <input
-                    type="text"
-                    maxLength={6}
-                    required
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                    placeholder="123456"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-center text-white tracking-[8px] font-mono placeholder:tracking-normal focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all font-bold"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || otp.length !== 6}
-                className="w-full py-3 rounded bg-gold-500 hover:bg-gold-400 text-black font-bold tracking-wide text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Verify & Login</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            <div className="text-center pt-2">
-              {cooldown > 0 ? (
-                <p className="text-neutral-500 text-xs font-medium">
-                  Resend verification code in <span className="text-neutral-300 font-semibold">{cooldown}s</span>
-                </p>
-              ) : (
-                <button
-                  onClick={handleResendOtp}
-                  disabled={loading}
-                  className="text-gold-500 hover:text-gold-400 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  Resend Verification Code
-                </button>
-              )}
+            <div className="space-y-2">
+              <h3 className="text-white font-bold text-lg">Registrations Closed</h3>
+              <p className="text-neutral-400 text-sm leading-relaxed max-w-xs mx-auto">
+                User registrations are currently disabled by the platform administrator. Please try again later.
+              </p>
             </div>
           </div>
+        ) : (
+          <>
+            {/* STEP 1: Registration form */}
+            {step === 1 && (
+              <>
+                <form onSubmit={handleSubmitDetails} className="space-y-5">
+                  {/* Full Name */}
+                  <div>
+                    <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Full Name</label>
+                    <div className="relative">
+                      <User className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="John Doe"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="At least 6 characters"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div>
+                    <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Confirm Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
+                      <input
+                        type="password"
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat password"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit button */}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full mt-2 py-3 rounded bg-gold-500 hover:bg-gold-400 text-black font-bold tracking-wide text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        <span>Register</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="relative flex py-4 items-center">
+                  <div className="flex-grow border-t border-neutral-900"></div>
+                  <span className="flex-shrink mx-4 text-neutral-500 text-xs font-semibold uppercase tracking-wider">or</span>
+                  <div className="flex-grow border-t border-neutral-900"></div>
+                </div>
+
+                {/* Google Login button */}
+                {clientId ? (
+                  <div className="flex justify-center">
+                    <div id="google-signin-btn" />
+                  </div>
+                ) : (
+                  isDev && (
+                    <div className="p-3 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-400 leading-relaxed flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold">Google Sign-In Unconfigured:</span> Define <code className="bg-neutral-900 px-1 py-0.5 rounded font-mono text-white text-[9px]">VITE_GOOGLE_CLIENT_ID</code> in environment to activate.
+                      </div>
+                    </div>
+                  )
+                )}
+              </>
+            )}
+
+            {/* STEP 2: OTP Verification form */}
+            {step === 2 && (
+              <div className="space-y-6">
+                <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40 text-center space-y-2">
+                  <p className="text-xs text-neutral-400">An OTP code has been dispatched to:</p>
+                  <p className="text-sm font-bold text-white tracking-wide">{email}</p>
+                  <p className="text-[10px] text-neutral-500">Please enter the 6-digit code within 5 minutes.</p>
+                </div>
+
+                <form onSubmit={handleVerifyOtp} className="space-y-5">
+                  <div>
+                    <label className="block text-neutral-300 text-xs font-semibold uppercase tracking-wider mb-2">Verification Code</label>
+                    <div className="relative">
+                      <KeyRound className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-500" />
+                      <input
+                        type="text"
+                        maxLength={6}
+                        required
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="123456"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm text-center text-white tracking-[8px] font-mono placeholder:tracking-normal focus:outline-none focus:border-gold-500/40 focus:ring-1 focus:ring-gold-500/20 transition-all font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || otp.length !== 6}
+                    className="w-full py-3 rounded bg-gold-500 hover:bg-gold-400 text-black font-bold tracking-wide text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Verify & Login</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="text-center pt-2">
+                  {cooldown > 0 ? (
+                    <p className="text-neutral-500 text-xs font-medium">
+                      Resend verification code in <span className="text-neutral-300 font-semibold">{cooldown}s</span>
+                    </p>
+                  ) : (
+                    <button
+                      onClick={handleResendOtp}
+                      disabled={loading}
+                      className="text-gold-500 hover:text-gold-400 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      Resend Verification Code
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Login redirection link */}

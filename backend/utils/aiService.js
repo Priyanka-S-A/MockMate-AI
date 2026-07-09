@@ -160,6 +160,10 @@ Rules:
 
 /**
  * evaluateAnswer
+ * Concept-grounded evaluation: the model first identifies the key concepts
+ * a correct answer must contain, then scores based on actual coverage.
+ * Weaknesses are only emitted when genuinely present; strong answers get
+ * empty or near-empty weakness arrays.
  */
 export const evaluateAnswer = async ({ question, userAnswer, domain, difficulty }) => {
   if (!userAnswer || userAnswer.trim().length === 0) {
@@ -167,34 +171,64 @@ export const evaluateAnswer = async ({ question, userAnswer, domain, difficulty 
       score: 0,
       technicalAccuracy: 'No answer provided.',
       completeness: 'The question was skipped or left blank.',
-      missingPoints: ['Complete answer required'],
+      missingPoints: ['Complete answer required — even a partial attempt demonstrates reasoning.'],
       strengths: [],
-      weaknesses: ['No answer provided'],
-      suggestions: 'Attempt every question — even a partial answer shows reasoning.',
+      weaknesses: ['No answer was submitted.'],
+      suggestions: 'Always attempt every question. Partial answers with correct reasoning earn partial credit.',
       idealAnswer: '',
     };
   }
 
-  const prompt = `You are an expert technical interviewer evaluating a candidate's answer.
+  const prompt = `You are a senior technical interviewer at a leading technology company. You evaluate candidates with the same rigour as FAANG-style technical interviews.
 
-Question: ${question}
-Domain: ${domain}
-Difficulty: ${difficulty}
-Candidate's Answer: ${userAnswer}
+QUESTION: ${question}
+DOMAIN: ${domain}
+DIFFICULTY: ${difficulty}
+CANDIDATE'S ANSWER:
+"""
+${userAnswer}
+"""
 
-Evaluate the answer and return a JSON object with EXACTLY these fields:
+Evaluation process (follow STRICTLY):
+
+STEP 1 — Identify key concepts: Mentally enumerate the 3-6 specific technical concepts, facts, or mechanisms that a complete, correct answer to THIS question must address. Do not output this list — use it internally.
+
+STEP 2 — Map coverage: For each key concept, determine if the candidate's answer covers it correctly, partially, incorrectly, or not at all.
+
+STEP 3 — Score calibration (be accurate, do NOT inflate):
+  - 9-10 : All or nearly all key concepts covered correctly with clarity and appropriate depth.
+  - 7-8  : Most key concepts covered; minor gaps or slight imprecision.
+  - 5-6  : Some key concepts present, but notable gaps or inaccuracies that would concern a real interviewer.
+  - 3-4  : Few concepts mentioned; significant gaps, vague statements, or misconceptions.
+  - 1-2  : Mostly incorrect, off-topic, or extremely vague — a real interviewer would not pass this.
+  - 0    : Blank, completely irrelevant, or nonsensical.
+
+STEP 4 — Build output fields:
+  - strengths      : List ONLY things the candidate explicitly demonstrated correctly. Quote or closely paraphrase their specific correct statements. If score ≤ 2, return [].
+  - weaknesses     : List ONLY genuine technical errors or critical omissions that would concern an interviewer. If score ≥ 8, return [] or at most one very minor refinement point. Do NOT manufacture weaknesses for strong answers.
+  - missingPoints  : Name the specific key concepts or important details that were absent from the answer. If score ≥ 9, return [].
+  - technicalAccuracy : 1-2 sentences assessing the correctness of what was actually said — be specific to their words, not generic.
+  - completeness   : 1-2 sentences on coverage relative to what is expected at ${difficulty} level.
+  - suggestions    : Targeted, actionable advice tied directly to the missing points or errors. If score ≥ 9, describe what would elevate the answer to truly exemplary. Never repeat phrases from other fields.
+  - idealAnswer    : Write a complete, high-quality model answer for this exact question at ${difficulty} level. Be technically precise, well-structured, and comprehensive (100-250 words). This is shown to the candidate for learning purposes.
+
+Return a JSON object with EXACTLY these fields (no extra fields, no omissions):
 {
   "score": <integer 0-10>,
-  "technicalAccuracy": "<brief assessment of technical correctness>",
-  "completeness": "<how complete the answer is>",
-  "missingPoints": ["<point 1>", "<point 2>"],
-  "strengths": ["<strength 1>", "<strength 2>"],
-  "weaknesses": ["<weakness 1>", "<weakness 2>"],
-  "suggestions": "<specific improvement suggestions>",
-  "idealAnswer": "<a concise model answer for this question>"
+  "technicalAccuracy": "<string>",
+  "completeness": "<string>",
+  "missingPoints": ["<string>", ...],
+  "strengths": ["<string>", ...],
+  "weaknesses": ["<string>", ...],
+  "suggestions": "<string>",
+  "idealAnswer": "<string>"
 }
 
-Return ONLY valid JSON. No markdown, no code blocks, no extra text.`;
+Critical output rules:
+- Every sentence in every field must be specific to THIS question and THIS candidate's answer. No generic boilerplate.
+- An empty array [] for strengths, weaknesses, or missingPoints is valid and preferred over forcing irrelevant items.
+- Do NOT repeat information across fields.
+- Return ONLY valid JSON. No markdown, no code fences, no commentary before or after the JSON.`;
 
   try {
     const model = getModel();
@@ -205,53 +239,96 @@ Return ONLY valid JSON. No markdown, no code blocks, no extra text.`;
     text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
 
     const evaluation = JSON.parse(text);
-    console.log(`[AI Service] Successfully evaluated answer using Gemini API for question: "${question.substring(0, 40)}..."`);
+    console.log(`[AI Service] Successfully evaluated answer using Gemini API for question: "${question.substring(0, 50)}..."`);
     return evaluation;
   } catch (error) {
     console.warn(`[AI Service Warning] Gemini API failed for answer evaluation: ${error.message}. Using offline fallback.`);
     const wordsCount = userAnswer.trim().split(/\s+/).filter(Boolean).length;
-    let score = 5;
-    if (wordsCount > 40) score = 8;
-    else if (wordsCount > 20) score = 6;
-    else if (wordsCount > 5) score = 4;
-    else score = 2;
+    let score;
+    if (wordsCount > 60) score = 7;
+    else if (wordsCount > 40) score = 5;
+    else if (wordsCount > 15) score = 3;
+    else score = 1;
 
     return {
       score,
-      technicalAccuracy: `Contains basic understanding of ${domain} concepts at ${difficulty} level (Offline Evaluation).`,
-      completeness: wordsCount > 25 ? 'Complete explanation with decent elaboration.' : 'Brief response; could benefit from more detailed explanation.',
-      missingPoints: ['Core syntax, architectural design patterns, or runtime constraints.', 'Real-world application or code context.'],
-      strengths: ['Addressed the main question prompt.', 'Used correct terminology.'],
-      weaknesses: ['Lacks depth or detailed implementation details.'],
-      suggestions: 'Our AI Evaluation service is temporarily offline. A baseline evaluation has been generated based on the response length. Try expanding your response with structural code blocks or project scenarios.',
-      idealAnswer: `An ideal answer for this ${difficulty} level question on "${question}" would define the core APIs or behaviors, state their pros/cons, and include simple code or architecture references.`
+      technicalAccuracy: `AI evaluation is temporarily unavailable. A baseline score has been assigned based on response length for this ${difficulty}-level ${domain} question.`,
+      completeness: wordsCount > 40
+        ? 'The response is reasonably detailed, though AI-based concept analysis is unavailable right now.'
+        : 'The response appears brief. A longer, structured answer is recommended for this difficulty level.',
+      missingPoints: ['AI evaluation offline — specific missing concepts cannot be identified at this time.'],
+      strengths: wordsCount > 15 ? ['A response was attempted, which shows engagement with the question.'] : [],
+      weaknesses: wordsCount <= 15 ? ['The response is too brief to meaningfully assess technical depth.'] : [],
+      suggestions: 'The AI evaluation service is temporarily offline. Please retry submission, or expand your answer to cover key concepts, definitions, trade-offs, and real-world examples relevant to the question.',
+      idealAnswer: '',
     };
   }
 };
 
 /**
  * generateInterviewSummary
+ * Synthesizes patterns across ALL answered questions, passing per-question
+ * answers, strengths, weaknesses, and missing points so the model can
+ * derive genuine themes rather than generic placeholders.
  */
 export const generateInterviewSummary = async ({ domain, difficulty, questions, overallScore }) => {
   const answeredQuestions = questions.filter((q) => q.status === 'answered');
-  const qaSummary = answeredQuestions
-    .map((q, i) => `Q${i + 1}: ${q.questionText}\nScore: ${q.evaluation?.score ?? 0}/10`)
-    .join('\n\n');
 
-  const prompt = `You are a career coach reviewing a mock interview session.
-Domain: ${domain} | Difficulty: ${difficulty} | Overall Score: ${overallScore}/100
+  // Build a rich context block for each answered question
+  const qaSummary = answeredQuestions.map((q, i) => {
+    const ev = q.evaluation ?? {};
+    const score = ev.score ?? 0;
+    const strengths = (ev.strengths ?? []).join('; ') || 'None noted';
+    const weaknesses = (ev.weaknesses ?? []).join('; ') || 'None noted';
+    const missing = (ev.missingPoints ?? []).join('; ') || 'None';
+    const answerSnippet = (q.userAnswerText || '').substring(0, 300);
+    return `--- Question ${i + 1} (Score: ${score}/10) ---
+Question: ${q.questionText}
+Candidate's Answer (excerpt): ${answerSnippet}${(q.userAnswerText || '').length > 300 ? '...' : ''}
+Strengths demonstrated: ${strengths}
+Weaknesses / Errors: ${weaknesses}
+Missing concepts: ${missing}`;
+  }).join('\n\n');
 
-Questions covered:
+  const skippedCount = questions.filter((q) => q.status === 'skipped').length;
+  const skippedNote = skippedCount > 0 ? `\nNote: ${skippedCount} question(s) were skipped and not evaluated.` : '';
+
+  const prompt = `You are a professional career coach analyzing a completed mock technical interview. Your job is to synthesize patterns across all questions and deliver genuinely personalized, evidence-based feedback.
+
+INTERVIEW OVERVIEW:
+Domain: ${domain} | Difficulty: ${difficulty} | Overall Score: ${overallScore}%${skippedNote}
+
+DETAILED PERFORMANCE PER QUESTION:
 ${qaSummary}
+
+Your synthesis task:
+
+1. STRONG AREAS (strongAreas array):
+   - Identify 2-4 SPECIFIC technical themes or concepts the candidate demonstrated well ACROSS the session.
+   - Ground each item in evidence from the question data above (e.g., "Correctly explained Java's garbage collection mechanism including generational collection" — not just "Java concepts").
+   - If overall score is below 50%, keep this list short (1-2 items maximum).
+   - Do NOT include generic phrases like "Good communication" or "Showed enthusiasm".
+
+2. WEAK AREAS (weakAreas array):
+   - Identify 2-4 SPECIFIC technical themes or concepts the candidate needs to improve, drawn from actual weaknesses and missing points above.
+   - Be precise (e.g., "Incomplete understanding of SQL index internals and query execution plans" — not just "SQL").
+   - If overall score is 80%+, this can be empty [] or contain only 1 very minor refinement area.
+   - Do NOT list areas not evidenced in the data above.
+
+3. LEARNING ROADMAP (learningRoadmap string):
+   - Write 2-4 sentences of targeted, actionable study recommendations STRICTLY based on the identified weak areas.
+   - Name specific topics, mechanisms, or sub-concepts to study (e.g., "Focus on the Java Memory Model's happens-before guarantee, volatile semantics, and the difference between synchronized methods and ReentrantLock").
+   - If no weak areas exist, write a plan for reaching expert-level mastery in the identified strong areas.
+   - Do NOT give generic advice like "practice more" or "read documentation".
 
 Return a JSON object with EXACTLY these fields:
 {
-  "strongAreas": ["<area 1>", "<area 2>"],
-  "weakAreas": ["<area 1>", "<area 2>"],
-  "learningRoadmap": "<specific topics and resources to study, as a short paragraph>"
+  "strongAreas": ["<specific theme 1>", "<specific theme 2>", ...],
+  "weakAreas": ["<specific theme 1>", "<specific theme 2>", ...],
+  "learningRoadmap": "<targeted 2-4 sentence paragraph>"
 }
 
-Return ONLY valid JSON. No markdown, no code blocks, no extra text.`;
+Return ONLY valid JSON. No markdown, no code fences, no extra text.`;
 
   try {
     const model = getModel();
@@ -259,14 +336,34 @@ Return ONLY valid JSON. No markdown, no code blocks, no extra text.`;
     let text = result.response.text().trim();
     text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
     const summary = JSON.parse(text);
-    console.log(`[AI Service] Successfully generated summary using Gemini API for domain: ${domain}`);
+    console.log(`[AI Service] Successfully generated personalized summary using Gemini API for domain: ${domain}`);
     return summary;
   } catch (error) {
     console.warn(`[AI Service Warning] Gemini API failed for summary generation: ${error.message}. Using offline fallback.`);
+    // Build a minimal but still question-aware fallback
+    const answeredCount = answeredQuestions.length;
+    const avgScore = answeredCount > 0
+      ? Math.round(answeredQuestions.reduce((s, q) => s + (q.evaluation?.score ?? 0), 0) / answeredCount)
+      : 0;
+    const allMissing = answeredQuestions
+      .flatMap((q) => q.evaluation?.missingPoints ?? [])
+      .filter(Boolean)
+      .slice(0, 3);
+    const allStrengths = answeredQuestions
+      .flatMap((q) => q.evaluation?.strengths ?? [])
+      .filter(Boolean)
+      .slice(0, 3);
+
     return {
-      strongAreas: [`Core ${domain} principles`, `Response structure`],
-      weakAreas: [`Advanced optimization for ${difficulty} scenarios`, `In-depth implementation`],
-      learningRoadmap: `Focus on code patterns, memory constraints, and algorithm analysis in ${domain}. Reference standard references, technical documentation, and practice system design scenarios.`
+      strongAreas: allStrengths.length > 0
+        ? allStrengths
+        : [`Demonstrated engagement with ${domain} ${difficulty}-level questions`],
+      weakAreas: allMissing.length > 0
+        ? allMissing
+        : avgScore < 6 ? [`Deeper conceptual understanding of core ${domain} topics at ${difficulty} level`] : [],
+      learningRoadmap: allMissing.length > 0
+        ? `Review the following areas identified as gaps in this session: ${allMissing.join(', ')}. Use official documentation, structured tutorials, and hands-on coding exercises to solidify each concept.`
+        : `Continue practicing ${domain} at ${difficulty} level. Focus on edge cases, real-world system design, and explaining concepts concisely under time pressure.`,
     };
   }
 };

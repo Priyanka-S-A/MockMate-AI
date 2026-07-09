@@ -12,13 +12,17 @@ import {
   Award
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 
 const Landing = () => {
   const { user } = useAuth();
+  const { settings } = useSettings();
+  const platformName = settings?.platformName || 'MockMate AI';
+  const logoUrl = settings?.logoUrl;
 
   const features = [
     {
-      title: "MockMate AI mock interview rooms",
+      title: `${platformName} mock interview rooms`,
       desc: "Practice with custom interviewers that generate questions dynamically for Java, SQL, Python, Web Dev, and HR domains.",
       icon: Terminal,
     },
@@ -77,8 +81,13 @@ const Landing = () => {
           <span>Next-Generation Mock Interviews</span>
         </div>
         
-        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white mb-6 leading-[1.15]">
-          Ace technical & HR placement rounds with <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-amber-500">MockMate AI</span>
+        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white mb-6 leading-[1.15] flex flex-wrap justify-center items-center gap-x-3">
+          <span>Ace technical & HR placement rounds with</span> 
+          {logoUrl ? (
+            <span className="inline-flex items-center"><img src={logoUrl} alt={platformName} className="h-12 sm:h-16 object-contain inline-block" /></span>
+          ) : (
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-amber-500">{platformName}</span>
+          )}
         </h1>
         
         <p className="max-w-2xl mx-auto text-neutral-400 text-base sm:text-lg mb-10 leading-relaxed">
@@ -179,8 +188,15 @@ const Landing = () => {
       <footer className="relative z-10 border-t border-neutral-900 bg-neutral-950/80 px-6 py-12">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div>
-            <div className="font-bold text-lg text-white mb-2 tracking-wider">
-              <span className="text-gold-500">MockMate</span> AI
+            <div className="font-bold text-lg text-white mb-2 tracking-wider flex items-center gap-2">
+              {logoUrl ? (
+                <img src={logoUrl} alt={platformName} className="h-8 object-contain" />
+              ) : (
+                <>
+                  <span className="text-gold-500">MockMate</span>
+                  <span>AI</span>
+                </>
+              )}
             </div>
             <p className="text-neutral-500 text-xs max-w-sm leading-relaxed">
               Unlock placement success using our dynamic technical and HR interview platform. Powered by our intelligent interview analysis.
@@ -191,7 +207,7 @@ const Landing = () => {
             <Link to="/register" className="hover:text-gold-500 transition-colors">Register</Link>
             <a href="#docs" className="hover:text-gold-500 transition-colors">Docs</a>
             <span className="text-neutral-600">|</span>
-            <span className="text-neutral-600 text-xs">© 2026 MockMate AI. All rights reserved.</span>
+            <span className="text-neutral-600 text-xs">© 2026 {platformName}. All rights reserved.</span>
           </div>
         </div>
       </footer>

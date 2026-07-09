@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { Mail, Lock, LogIn, AlertCircle, AlertTriangle } from 'lucide-react';
 
 const Login = () => {
   const { login, googleLogin } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,6 +15,9 @@ const Login = () => {
 
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const isDev = import.meta.env.DEV;
+
+  const platformName = settings?.platformName || 'MockMate AI';
+  const logoUrl = settings?.logoUrl;
 
   useEffect(() => {
     let checkInterval;
@@ -84,9 +89,15 @@ const Login = () => {
 
       <div className="w-full max-w-md p-8 rounded-2xl border border-neutral-900 bg-neutral-950/40 glass transition-glow relative z-10">
         {/* Title */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-block font-extrabold text-2xl tracking-wider text-white mb-2">
-            <span className="text-gold-500 font-extrabold">MockMate</span> <span className="text-neutral-200">AI</span>
+        <div className="text-center mb-8 space-y-2">
+          <Link to="/" className="inline-block mb-2">
+            {logoUrl ? (
+              <img src={logoUrl} alt={platformName} className="h-12 object-contain" />
+            ) : (
+              <span className="font-extrabold text-2xl tracking-wider text-white">
+                <span className="text-gold-500 font-extrabold">MockMate</span> <span className="text-neutral-200">AI</span>
+              </span>
+            )}
           </Link>
           <p className="text-neutral-400 text-xs sm:text-sm">Sign in to resume mock training</p>
         </div>

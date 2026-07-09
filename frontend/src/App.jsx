@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
 
 import ProtectedRoute from './components/common/ProtectedRoute';
 
@@ -21,12 +22,36 @@ import AdminPortal from './pages/AdminPortal';
 import InterviewRoom from './pages/InterviewRoom';
 import InterviewSummary from './pages/InterviewSummary';
 import DailyChallenge from './pages/DailyChallenge';
+import Maintenance from './pages/Maintenance';
 
-function App() {
+function AppRoutes() {
+  const { settings, loading: settingsLoading } = useSettings();
+  const { user, loading: authLoading } = useAuth();
+
+  if (settingsLoading || authLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-gold-500/20 border-t-gold-500 rounded-full animate-spin"></div>
+          <span className="text-neutral-500 text-sm font-medium tracking-wide">Syncing platform...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const isMaintenance = settings?.maintenanceMode;
+  const isAdmin = user && user.role === 'admin';
+
   return (
-    <AuthProvider>
-        <BrowserRouter>
-          <Routes>
+    <BrowserRouter>
+      <Routes>
+        {isMaintenance && !isAdmin ? (
+          <>
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<Maintenance />} />
+          </>
+        ) : (
+          <>
             {/* Public Routes */}
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
@@ -131,9 +156,20 @@ function App() {
 
             {/* Catch-all Redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-    </AuthProvider>
+          </>
+        )}
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+function App() {
+  return (
+    <SettingsProvider>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </SettingsProvider>
   );
 }
 

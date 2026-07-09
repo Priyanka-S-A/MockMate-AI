@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Interview from '../models/Interview.js';
 import User from '../models/User.js';
 import {
@@ -352,25 +353,46 @@ export const getUserInterviews = async (req, res) => {
 // @route   GET /api/interviews/:id/pdf
 // @access  Private
 export const downloadInterviewPDF = async (req, res) => {
+  const interviewId = req.params.id;
   try {
-    const interview = await Interview.findById(req.params.id);
+    console.log(`[PDF Generator] Starting PDF generation for interview ID: ${interviewId}`);
+
+    if (!mongoose.Types.ObjectId.isValid(interviewId)) {
+      console.warn(`[PDF Generator] Invalid interview ID format: ${interviewId}`);
+      return res.status(400).json({ message: 'Invalid interview ID format.' });
+    }
+
+    const interview = await Interview.findById(interviewId);
     if (!interview) {
+      console.warn(`[PDF Generator] Interview not found in database: ${interviewId}`);
       return res.status(404).json({ message: 'Interview not found.' });
     }
+
     if (interview.userId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      console.warn(`[PDF Generator] Unauthorized download attempt of interview ${interviewId} by user ${req.user._id}`);
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
+    const pdfBuffer = await generatePDFReport(interview);
+
+    // Sanitize domain name to prevent spaces or special characters from splitting Content-Disposition header
+    const rawDomain = interview.domain || 'Mock_Interview';
+    const safeDomain = rawDomain.replace(/[^a-zA-Z0-9-_]/g, '_');
+
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', pdfBuffer.length);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename=Interview_Report_${interview.domain}_${req.params.id}.pdf`
+      `attachment; filename="Interview_Report_${safeDomain}_${interviewId}.pdf"`
     );
 
-    generatePDFReport(interview, res);
+    res.send(pdfBuffer);
+    console.log(`[PDF Generator] Successfully generated and sent PDF for interview ID: ${interviewId}`);
   } catch (error) {
-    console.error('PDF Download Error:', error);
-    res.status(500).json({ message: error.message });
+    console.error(`[PDF Generator Error] Failed to generate PDF for interview: ${interviewId}. Reason:`, error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to generate PDF report: ${error.message}` });
+    }
   }
 };
 

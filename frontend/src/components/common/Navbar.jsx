@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
 import { Target, Zap, LogOut, User as UserIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -12,6 +13,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
 
   // Attendance calendar modal states
@@ -66,8 +68,18 @@ const Navbar = ({ onToggleSidebar }) => {
             </svg>
           </button>
           <Link to="/" className="flex items-center gap-2 font-bold text-xl tracking-wider text-white">
-            <span className="text-gold-500 font-extrabold font-sans">MockMate</span>
-            <span className="text-neutral-200"> AI</span>
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt={settings.platformName || 'MockMate AI'} className="h-8 object-contain" />
+            ) : (
+              <>
+                <span className="text-gold-500 font-extrabold font-sans">
+                  {settings?.platformName ? settings.platformName.split(' ')[0] : 'MockMate'}
+                </span>
+                <span className="text-neutral-200">
+                  {settings?.platformName ? settings.platformName.split(' ').slice(1).join(' ') : ' AI'}
+                </span>
+              </>
+            )}
           </Link>
         </div>
 

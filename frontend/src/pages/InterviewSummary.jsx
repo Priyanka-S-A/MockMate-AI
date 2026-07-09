@@ -39,7 +39,19 @@ const InterviewSummary = () => {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!response.ok) throw new Error('PDF generation failed');
+      if (!response.ok) {
+        let errorMsg = 'Failed to generate PDF report. Please try again.';
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorJson = await response.json();
+            if (errorJson && errorJson.message) {
+              errorMsg = errorJson.message;
+            }
+          }
+        } catch (_) {}
+        throw new Error(errorMsg);
+      }
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -49,7 +61,10 @@ const InterviewSummary = () => {
       link.click();
       link.parentNode.removeChild(link);
     } catch (err) {
-      alert('Failed to download PDF report: ' + err.message);
+      const displayMsg = err.message === 'Failed to fetch'
+        ? 'Unable to connect to the server. Please check your internet connection or verify the server is running.'
+        : err.message;
+      alert('Failed to download PDF report: ' + displayMsg);
     } finally {
       setDownloading(false);
     }
