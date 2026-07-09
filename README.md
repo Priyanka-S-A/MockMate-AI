@@ -264,34 +264,32 @@ MockMate AI features a secure, hidden administrative portal reserved for adminis
 
 ## 📸 Screenshots
 
-*Placeholders for MockMate AI visual flow:*
+## Landing Page
+![Landing Page](screenshots/landing-page.png)
 
-#### Landing Page
-> *Professional introduction layout featuring key value propositions and CTA buttons.*
+## Login Page
+![Login Page](screenshots/login-page.png)
 
-#### Login Page
-> *Dark-themed login screen featuring a clean "Continue with Google" OAuth button.*
+## Dashboard
+![Dashboard](screenshots/dashboard.png)
 
-#### Dashboard
-> *Permanent dark-themed layout displaying total interviews, XP tracker, daily challenge, and quick mock options.*
+## Practice Interview
+![Practice Interview](screenshots/practice-interview.png)
 
-#### Practice Interview
-> *Multi-select domain configuration form with options for question count and difficulty levels.*
+## Resume Interview
+![Resume Interview](screenshots/resume-interview.png)
 
-#### Resume Interview
-> *Minimalist PDF resume uploader.*
+## Company-Specific Interview
+![Company-Specific Interview](screenshots/company-interview.png)
 
-#### Company-Specific Interview
-> *Grid listing target corporations.*
+## Analytics
+![Analytics](screenshots/analytics.png)
 
-#### Analytics
-> *Chart.js grids displaying score trends, domain coverages, and weekly activity metrics.*
+## Interview History Logs
+![Interview History Logs](screenshots/interview-history-log.png)
 
-#### Interview Summary
-> *Evaluation cards outlining overall score rings, key strengths, weak points, learning roadmap, and PDF export buttons.*
-
-#### Admin Portal
-> *Administrator dashboard showing real-time sign-up lines, interview bar graphs, and user management tables.*
+## Admin Portal
+![Admin Portal](screenshots/admin-portal.png)
 
 ---
 
