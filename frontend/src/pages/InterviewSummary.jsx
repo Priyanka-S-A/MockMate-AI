@@ -3,7 +3,7 @@ import { useLocation, useNavigate, Link, useParams } from 'react-router-dom';
 import AppLayout from '../components/common/AppLayout';
 import CircularScore from '../components/ui/CircularScore';
 import { Trophy, CheckCircle, Target, Map, BarChart3, RotateCcw, Download, Loader2 } from 'lucide-react';
-import { api } from '../services/api';
+import { api, API_URL } from '../services/api';
 
 const InterviewSummary = () => {
   const { state } = useLocation();
@@ -33,7 +33,7 @@ const InterviewSummary = () => {
     setDownloading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/interviews/${interviewId}/pdf`, {
+      const response = await fetch(`${API_URL}/interviews/${interviewId}/pdf`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
