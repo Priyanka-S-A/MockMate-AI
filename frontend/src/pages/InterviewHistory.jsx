@@ -208,14 +208,9 @@ const InterviewHistory = () => {
                       return (
                         <tr key={iv._id} className="hover:bg-neutral-900/10 transition-colors">
                           <td className="p-4">
-                            <div className="flex flex-col gap-1">
-                              <span className={`px-2.5 py-1 rounded text-xs font-semibold border w-fit ${domainColorMap[iv.domain] || 'text-neutral-400 bg-neutral-800'}`}>
-                                {iv.domain}
-                              </span>
-                              <span className={`px-2 py-1 rounded text-xs font-bold border w-fit ${scoreColor}`}>
-                                {scoreVal}/100
-                              </span>
-                            </div>
+                            <span className={`px-2.5 py-1 rounded text-xs font-semibold border w-fit ${domainColorMap[iv.domain] || 'text-neutral-400 bg-neutral-800'}`}>
+                              {iv.domain}
+                            </span>
                           </td>
                           <td className="p-4">
                             {iv.type === 'company' && iv.companyName ? (
@@ -235,6 +230,11 @@ const InterviewHistory = () => {
                           <td className="p-4">
                             <span className={`px-2 py-0.5 rounded text-xs font-medium border ${difficultyColor[iv.difficulty] || 'text-neutral-400'}`}>
                               {iv.difficulty}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded text-xs font-bold border w-fit ${scoreColor}`}>
+                              {scoreVal}/100
                             </span>
                           </td>
                           <td className="p-4 text-xs text-neutral-500">
